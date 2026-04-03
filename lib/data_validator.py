@@ -48,6 +48,9 @@ class DataValidator:
     ALLOWED_ROOT_ENTRIES = {
         "project.json",
         "style_reference.png",
+        "style_reference.jpg",
+        "style_reference.jpeg",
+        "style_reference.webp",
         "source",
         "scripts",
         "drafts",
@@ -55,6 +58,7 @@ class DataValidator:
         "clues",
         "storyboards",
         "videos",
+        "thumbnails",
         "output",
         "versions",
     }
@@ -449,14 +453,6 @@ class DataValidator:
         novel = episode.get("novel")
         if novel is not None and not isinstance(novel, dict):
             errors.append("novel 字段必须是对象")
-        elif isinstance(novel, dict):
-            self._validate_local_reference(
-                project_dir,
-                novel.get("source_file"),
-                errors,
-                "novel.source_file",
-                default_dir="source",
-            )
 
         if content_mode == "narration":
             self._validate_segments(

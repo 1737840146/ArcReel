@@ -30,6 +30,11 @@ import type {
   ProviderTestResult,
   ProviderCredential,
   UsageStatsResponse,
+  CustomProviderInfo,
+  CustomProviderModelInfo,
+  CustomProviderCreateRequest,
+  CustomProviderModelInput,
+  DiscoveredModel,
 } from "@/types";
 import { getToken, clearToken } from "@/utils/auth";
 
@@ -217,7 +222,13 @@ class API {
       const error = await response
         .json()
         .catch(() => ({ detail: response.statusText }));
-      throw new Error(error.detail || "请求失败");
+      let message = "请求失败";
+      if (typeof error.detail === "string") {
+        message = error.detail;
+      } else if (Array.isArray(error.detail) && error.detail.length > 0) {
+        message = error.detail.map((e: string | { msg?: string }) => (typeof e === "string" ? e : e?.msg)).filter(Boolean).join("; ") || message;
+      }
+      throw new Error(message);
     }
 
     if (response.status === 204) {
@@ -1315,6 +1326,48 @@ class API {
     );
     await throwIfNotOk(response, "上传凭证失败");
     return response.json();
+  }
+
+  // ==================== 自定义供应商 API ====================
+
+  static async listCustomProviders(): Promise<{ providers: CustomProviderInfo[] }> {
+    return this.request("/custom-providers");
+  }
+
+  static async createCustomProvider(data: CustomProviderCreateRequest): Promise<CustomProviderInfo> {
+    return this.request("/custom-providers", { method: "POST", body: JSON.stringify(data) });
+  }
+
+  static async getCustomProvider(id: number): Promise<CustomProviderInfo> {
+    return this.request(`/custom-providers/${id}`);
+  }
+
+  static async updateCustomProvider(id: number, data: Partial<Omit<CustomProviderCreateRequest, "api_format" | "models">>): Promise<void> {
+    return this.request(`/custom-providers/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  }
+
+  static async fullUpdateCustomProvider(id: number, data: { display_name: string; base_url: string; api_key?: string; models: CustomProviderModelInput[] }): Promise<CustomProviderInfo> {
+    return this.request(`/custom-providers/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  }
+
+  static async deleteCustomProvider(id: number): Promise<void> {
+    return this.request(`/custom-providers/${id}`, { method: "DELETE" });
+  }
+
+  static async replaceCustomProviderModels(id: number, models: CustomProviderModelInput[]): Promise<CustomProviderModelInfo[]> {
+    return this.request(`/custom-providers/${id}/models`, { method: "PUT", body: JSON.stringify({ models }) });
+  }
+
+  static async discoverModels(data: { api_format: string; base_url: string; api_key: string }): Promise<{ models: DiscoveredModel[] }> {
+    return this.request("/custom-providers/discover", { method: "POST", body: JSON.stringify(data) });
+  }
+
+  static async testCustomConnection(data: { api_format: string; base_url: string; api_key: string }): Promise<{ success: boolean; message: string }> {
+    return this.request("/custom-providers/test", { method: "POST", body: JSON.stringify(data) });
+  }
+
+  static async testCustomConnectionById(id: number): Promise<{ success: boolean; message: string }> {
+    return this.request(`/custom-providers/${id}/test`, { method: "POST" });
   }
 
   // ==================== 用量统计（按 provider 分组）API ====================

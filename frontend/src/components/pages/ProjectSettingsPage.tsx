@@ -1,7 +1,8 @@
 import { useParams, useLocation } from "wouter";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import { API } from "@/api";
+import { useAppStore } from "@/stores/app-store";
 import { ProviderModelSelect } from "@/components/ui/ProviderModelSelect";
 import { PROVIDER_NAMES } from "@/components/ui/ProviderIcon";
 
@@ -14,11 +15,17 @@ export function ProjectSettingsPage() {
     video_backends: string[];
     image_backends: string[];
     text_backends: string[];
+    provider_names?: Record<string, string>;
   } | null>(null);
   const [globalDefaults, setGlobalDefaults] = useState<{
     video: string;
     image: string;
   }>({ video: "", image: "" });
+
+  const allProviderNames = useMemo(
+    () => ({ ...PROVIDER_NAMES, ...(options?.provider_names ?? {}) }),
+    [options],
+  );
 
   // Project-level overrides (from project.json)
   // "" means "follow global default"
@@ -29,8 +36,6 @@ export function ProjectSettingsPage() {
   const [textOverview, setTextOverview] = useState<string>("");
   const [textStyle, setTextStyle] = useState<string>("");
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [savedOk, setSavedOk] = useState(false);
   const initialRef = useRef({ videoBackend: "", imageBackend: "", audioOverride: null as boolean | null, textScript: "", textOverview: "", textStyle: "" });
 
   useEffect(() => {
@@ -46,6 +51,7 @@ export function ProjectSettingsPage() {
         video_backends: configRes.options?.video_backends ?? [],
         image_backends: configRes.options?.image_backends ?? [],
         text_backends: configRes.options?.text_backends ?? [],
+        provider_names: configRes.options?.provider_names,
       });
       setGlobalDefaults({
         video: configRes.settings?.default_video_backend ?? "",
@@ -95,22 +101,19 @@ export function ProjectSettingsPage() {
 
   const handleSave = useCallback(async () => {
     setSaving(true);
-    setSaveError(null);
-    setSavedOk(false);
     try {
       await API.updateProject(projectName, {
-        video_backend: videoBackend || undefined,
-        image_backend: imageBackend || undefined,
+        video_backend: videoBackend || null,
+        image_backend: imageBackend || null,
         video_generate_audio: audioOverride,
-        text_backend_script: textScript || undefined,
-        text_backend_overview: textOverview || undefined,
-        text_backend_style: textStyle || undefined,
+        text_backend_script: textScript || null,
+        text_backend_overview: textOverview || null,
+        text_backend_style: textStyle || null,
       });
       initialRef.current = { videoBackend, imageBackend, audioOverride, textScript, textOverview, textStyle };
-      setSavedOk(true);
-      setTimeout(() => setSavedOk(false), 2000);
+      useAppStore.getState().pushToast("已保存", "success");
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : "保存失败");
+      useAppStore.getState().pushToast(e instanceof Error ? e.message : "保存失败", "error");
     } finally {
       setSaving(false);
     }
@@ -147,7 +150,7 @@ export function ProjectSettingsPage() {
               <ProviderModelSelect
                 value={videoBackend}
                 options={options.video_backends}
-                providerNames={PROVIDER_NAMES}
+                providerNames={allProviderNames}
                 onChange={setVideoBackend}
                 allowDefault
                 defaultHint={
@@ -162,7 +165,7 @@ export function ProjectSettingsPage() {
               <ProviderModelSelect
                 value={imageBackend}
                 options={options.image_backends}
-                providerNames={PROVIDER_NAMES}
+                providerNames={allProviderNames}
                 onChange={setImageBackend}
                 allowDefault
                 defaultHint={
@@ -208,7 +211,7 @@ export function ProjectSettingsPage() {
                     <ProviderModelSelect
                       value={value}
                       options={options.text_backends}
-                      providerNames={PROVIDER_NAMES}
+                      providerNames={allProviderNames}
                       onChange={setter}
                       allowDefault
                       defaultHint="跟随全局默认"
@@ -223,14 +226,6 @@ export function ProjectSettingsPage() {
 
         {!options && (
           <div className="text-sm text-gray-500">加载配置中…</div>
-        )}
-
-        {/* Error / success feedback */}
-        {saveError && (
-          <p className="text-sm text-red-400">{saveError}</p>
-        )}
-        {savedOk && (
-          <p className="text-sm text-green-400">已保存</p>
         )}
 
         {/* Actions */}
